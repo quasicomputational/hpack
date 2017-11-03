@@ -19,6 +19,20 @@ import           Hpack.FormattingHints (FormattingHints(..), sniffFormattingHint
 spec :: Spec
 spec = around_ (inTempDirectoryNamed "foo") $ do
   describe "hpack" $ do
+    context "with defaults" $ do
+      it "" $ do
+        [i|
+        defaults: sol-2017
+        library:
+          exposed-modules: Foo
+        |] `shouldRenderTo` library [i|
+        exposed-modules:
+            Foo
+        other-modules:
+            Paths_foo
+        default-extensions: RecordWildCards DeriveFunctor
+        |]
+
     context "with custom-setup" $ do
       it "warns on unknown fields" $ do
         [i|

@@ -66,9 +66,11 @@ import           Prelude ()
 import           Prelude.Compat
 import           System.Directory
 import           System.FilePath
+import qualified Data.Yaml as Yaml (decode)
 
 import           Hpack.GenericsUtil
 import           Hpack.Util
+import           Hpack.Extension
 import           Hpack.Yaml
 import           Hpack.Dependency
 
@@ -227,7 +229,8 @@ instance FromJSON ExecutableSection where
   parseJSON = genericParseJSON_
 
 data CommonOptions a = CommonOptions {
-  commonOptionsSourceDirs :: Maybe (List FilePath)
+  commonOptionsDefaults :: Maybe FilePath
+, commonOptionsSourceDirs :: Maybe (List FilePath)
 , commonOptionsDependencies :: Maybe Dependencies
 , commonOptionsDefaultExtensions :: Maybe (List String)
 , commonOptionsOtherExtensions :: Maybe (List String)
@@ -391,12 +394,13 @@ isNull name value = case parseMaybe p value of
 
 readPackageConfig :: FilePath -> IO (Either String ([String], Package))
 readPackageConfig file = do
+  userDataDir <- getAppUserDataDirectory "hpack"
   r <- decodeYaml file
   case r of
     Left err -> return (Left err)
     Right config -> do
       dir <- takeDirectory <$> canonicalizePath file
-      Right <$> toPackage dir config
+      toPackage userDataDir dir config
 
 data Package = Package {
   packageName :: String
@@ -507,8 +511,32 @@ toEmptySection :: CaptureUnknownFields (Product (CommonOptions Empty) a) -> Capt
 toEmptySection (CaptureUnknownFields unknownSectionFields (Product common a)) = case toSection_ Empty common of
   (unknownFields, sect) -> CaptureUnknownFields (unknownSectionFields ++ unknownFields) (sect, a)
 
-toPackage :: FilePath -> (CaptureUnknownFields (Product (CommonOptions Empty) PackageConfig)) -> IO ([String], Package)
-toPackage dir (toEmptySection -> CaptureUnknownFields unknownFields (globalOptions, PackageConfig{..})) = do
+toPackage :: FilePath -> FilePath -> (CaptureUnknownFields (Product (CommonOptions Empty) PackageConfig)) -> IO (Either String ([String], Package))
+toPackage userDataDir dir config@CaptureUnknownFields{captureUnknownFieldsValue = Product global _} = do
+  -- FIXME: warnings for defaults
+  -- FIXME: test for parse error in defaults
+  Right d <- getDefaults userDataDir global -- FIXME (Right ..)
+  let
+    (_, defaults) = toSection_ Empty d -- FIXME warnings
+    addDefaults :: Section Empty -> Section Empty
+    addDefaults = mergeSections Empty defaults
+  Right <$> toPackage_ dir (first addDefaults <$> toEmptySection config)
+
+getDefaults :: FilePath -> CommonOptions global -> IO (Either String (CommonOptions Empty))
+getDefaults userDataDir CommonOptions{..} = do
+  -- FIXME: don't allow includes?!
+  case commonOptionsDefaults of
+    Nothing -> return emptyDefaults
+    Just d -> case parseDefaults d of
+      Just defaults -> do
+        ensure userDataDir defaults
+        decodeYaml (defaultsPath userDataDir defaults)
+  where
+    emptyDefaults :: Either String (CommonOptions Empty)
+    emptyDefaults = maybe (Left "") Right (Yaml.decode "{}")
+
+toPackage_ :: FilePath -> (CaptureUnknownFields (Section Empty, PackageConfig)) -> IO ([String], Package)
+toPackage_ dir (CaptureUnknownFields unknownFields (globalOptions, PackageConfig{..})) = do
   libraryResult <- mapM (toLibrary dir packageName_ globalOptions) mLibrarySection
   let
     packageConfigExecutables_ :: Maybe (Map String (CaptureUnknownFields (Section ExecutableSection)))

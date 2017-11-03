@@ -29,6 +29,7 @@ import           Data.Char
 import           Data.Maybe
 import           Data.List.Compat
 import           System.Exit.Compat
+import           System.Directory
 import           System.FilePath
 import           Data.Map.Lazy (Map)
 import qualified Data.Map.Lazy as Map
