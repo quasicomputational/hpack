@@ -198,6 +198,8 @@ Glob patterns are expanded according to the following rules:
  - `**` is expanded in a `zsh`-like fashion (matching across directory
    separators)
  - `?`, `*` and `**` do not match a `.` at the beginning of a file/directory
+ - Metacharacters (`?`, `*` and `[`) can be escaped by enclosing them
+   in square brackets.
 
 ### Not repeating yourself
 

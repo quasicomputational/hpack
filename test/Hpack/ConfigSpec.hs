@@ -401,6 +401,17 @@ spec = do
         )
         (packageDataFiles >>> (`shouldMatchList` ["data/foo/index.html", "data/bar/index.html"]))
 
+    it "respects escaping in globs" $ do
+      withPackageConfig [i|
+        data-files:
+          - data/foo[*]
+        |]
+        (do
+        touch "data/foo*"
+        touch "data/foobar"
+        )
+        (packageDataFiles >>> (`shouldMatchList` ["data/foo*"]))
+
     it "accepts github" $ do
       withPackageConfig_ [i|
         github: hspec/hspec
